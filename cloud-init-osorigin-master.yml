@@ -1,0 +1,102 @@
+#cloud-config
+
+# TODO
+# pass variable for hostname
+
+write_files:
+  - path: /home/root/hosts.localhost
+    owner: root:root
+    permissions: '0444'
+    content: |
+      # bare minimum hostfile
+      [OSEv3:children]
+      masters
+      nodes
+      etcd
+
+      [OSEv3:vars]
+      # if your target hosts are Fedora uncomment this
+      # ansible_python_interpreter=/usr/bin/python3
+      openshift_deployment_type=origin
+      openshift_release=3.7
+      osm_cluster_network_cidr=10.128.0.0/14
+      openshift_portal_net=172.30.0.0/16
+      osm_host_subnet_length=9
+      # localhost likely doesn't meet the minimum requirements
+      openshift_disable_check=disk_availability,memory_availability
+
+      # Cloud provider
+      openshift_cloudprovider_kind=azure
+
+      # Enable service catalog
+      openshift_enable_service_catalog=false
+      # Enable template service broker (requires service catalog to be enabled, above)
+      template_service_broker_install=false
+
+      openshift_master_cluster_hostname=jzosorigindisk.eastus.cloudapp.azure.com
+      openshift_master_cluster_public_hostname=jzosorigindisk.eastus.cloudapp.azure.com
+
+      [masters]
+      localhost ansible_connection=local
+
+      [etcd]
+      localhost ansible_connection=local
+
+      [nodes]
+      localhost  ansible_connection=local openshift_schedulable=true openshift_node_labels="{'region': 'infra', 'zone': 'default'}"
+
+# Add yum repository configuration to the system
+#
+# The following example adds the file /etc/yum.repos.d/epel_testing.repo
+# which can then subsequently be used by yum for later operations.
+yum_repos:
+    # The name of the repository
+    epel:
+        # Any repository configuration options  
+        # See: man yum.conf
+        #
+        # This one is required!
+        baseurl: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        enabled: false
+        failovermethod: priority
+        gpgcheck: false
+        gpgkey: file:///etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL
+        name: Extra Packages for CentOS 7
+
+growpart:
+  mode: auto
+  devices: ['/']
+  ignore_growroot_disabled: false
+
+package_upgrade: true
+packages:
+  - wget
+  - git
+  - net-tools
+  - bind-utils
+  - iptables-services
+  - bridge-utils
+  - bash-completion
+  - kexec-tools
+  - sos
+  - psacct
+  - httpd-tools
+  - ansible 
+  - pyOpenSSL 
+  - python-passlib
+  - java-1.8.0-openjdk-headless
+  - docker
+
+runcmd:
+  - sed -i -e "s#^OPTIONS='--selinux-enabled'#OPTIONS='--selinux-enabled --insecure-registry 172.30.0.0/16'#" /etc/sysconfig/docker
+  - DOCKERVG=$( parted -m /dev/sda print all 2>/dev/null | grep unknown | grep /dev/sd | cut -d':' -f1  | awk 'NR==1' )
+  - echo "DEVS=${DOCKERVG}" >> /etc/sysconfig/docker-storage-setup
+  - echo "VG=docker-vg" >> /etc/sysconfig/docker-storage-setup
+  - docker-storage-setup
+  - systemctl enable docker
+  - systemctl start docker
+  - systemctl unmask chronyd
+  - git clone https://github.com/openshift/openshift-ansible.git /home/root/openshift-ansible
+  - ansible-playbook -i /home/root/hosts.localhost /home/root/openshift-ansible/playbooks/prerequisites.yml
+  - ansible-playbook -i /home/root/hosts.localhost /home/root/openshift-ansible/playbooks/deploy_cluster.yml
+  - sudo oadm policy add-cluster-role-to-user cluster-admin admin
