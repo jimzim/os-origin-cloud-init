@@ -15,9 +15,8 @@ az vm create \
   --ssh-key-value /Users/jimzim/.ssh/id_rsa.pub
   
 - Need to open the port in order for ansible installer to work
+- Will be fixed when using an ARM template
 az vm open-port -g cloud-init-osorigin-disk -n centos74 --port 8443 --priority 100
-
-az group delete -n cloud-init-osorigin-disk --no-wait -y
 
 ```
 
@@ -35,9 +34,8 @@ az vm create \
   --custom-data cloud-init-osorigin-master.yml \
   --ssh-key-value /Users/jimzim/.ssh/id_rsa.pub
 
+- Need to open the port in order for ansible installer to work
 az vm open-port -g cloud-init-osrhel -n osrhel --port 8443 --priority 100
-
-az group delete -n cloud-init-osrhel --no-wait -y
 
 ```
 
